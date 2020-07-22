@@ -1,0 +1,320 @@
+;; Carrega os outros ficheiros de código, escreve e lê ficheiros, e trata da interação com o utilizador
+;; Autor: Diogo Venâncio - 160221076
+;; Autor: André Gonçalves - 170221015
+;; Ano letivo 19/20
+
+;******* TABULEIROS ******
+
+;Devolve o caminho para o ficheiro problemas.dat
+(defun get-problems()
+  (make-pathname :host "c" :directory '(:absolute "lisp") :name "problemas" :type "dat")
+)
+
+;Retorna os boards no ficheiro problemas
+(defun read-boards()
+	(with-open-file (file (get-problems) :if-does-not-exist nil)
+		(do 
+			((result nil(cons next result))
+				(next (read file nil 'eof) (read file nil 'eof)))
+			((equal next 'eof) (reverse result))
+		)
+	)
+)
+
+;Mostra o menu inicial
+(defun inicial-menu()
+  (progn
+    (format t "~% -------------------------------------")
+    (format t "~%              Jogo do Bispo            ")
+    (format t "~%                                       ")
+    (format t "~%              1 - Começar              ")
+    (format t "~%                                       ")
+    (format t "~%              s - Sair                 ")
+    (format t "~% -------------------------------------~%~%> "))
+)
+
+;Iniciar programa
+(defun start()
+  (progn
+    (inicial-menu)
+      (let ((opt (read)))
+        (if (or (not (numberp opt)) (< opt 1) (> opt 1)) (progn (format t "Insira uma opção válida") (start))
+          (ecase opt
+            ('1 (ask-algorithm))
+            ('s (format t "Até á próxima!"))))))
+)
+
+;Menu que imprime a quantidade de opções que o jogador pode selecionar
+(defun boards(&optional (i 1) (problems (read-boards)))
+  (cond
+   ((null problems)
+    (progn
+      (format t"~%         6 - Board random                ")
+      (format t "~%                                        ")
+      (format t"~%           0 - Voltar                    ")
+      (format t "~% -------------------------------------~%~%> ")))
+   (t (progn
+        (if (= i 1)
+            (progn
+              (format t"~% -------------------------------------")
+              (format t "~%   Jogo do Bispo - Escolha o board   ")))
+        (format t"~%            ~a - Board ~a            " i i)
+        (boards (1+ i) (cdr problems)))))
+)
+
+;Função que retorna uma lista com o board
+(defun ler-board(menu-anterior)
+  (progn
+    (boards)
+    (let ((opt (read)))
+          (cond
+           ((eq opt '0) (funcall menu-anterior))
+           ((not (numberp opt)) (progn (format t "Insira uma opção válida") (ler-board menu-anterior)))
+           (t (let ((lista (read-boards)))
+                (cond
+                 ((equal opt 6) (list opt (board-random)))
+                 ((or (< opt 0) (> opt (length lista))) (progn (format t "Insira uma opção válida") (ler-board menu-anterior)))
+                 (t (list opt (nth (1- opt) lista)))))))))
+)
+
+;Apresenta a mensagem para escolher o algoritmo
+(defun algorithm-menu()
+  (progn
+    (format t "   ~%---------------------------------------------------------- ")
+    (format t "   ~%             Jogo do Bispo - Escolha o algoritmo           ")
+    (format t "   ~%                                                           ")
+    (format t "   ~%                   1 - Breadth First                       ")
+    (format t "   ~%                   2 - Depth First                         ")
+    (format t "   ~%                   3 - A*                                  ")
+    (format t "   ~%                   0 - Voltar                              ")
+    (format t "   ~%                                                           ")
+    (format t "   ~%                   s - Sair                                ")
+    (format t "   ~%                                                           ")
+    (format t "   ~% ---------------------------------------------------------~%~%> ")
+  )
+)
+
+;Função responsável por chamar os algoritmos implementados
+(defun ask-algorithm ()
+	(algorithm-menu)
+	(let ((option (read)))
+		(cond
+                 ((eq option '0) (start))
+                 ((eq option 's) (format t "Até á próxima!"))
+                 ((or (not (numberp option)) (> option 3) (< option 1)) (progn (format t "Insira uma opção válida") (ask-algorithm)))
+                 (t (let* ((ref-board (ler-board 'ask-algorithm)) ;Guarda a lista com o board
+                           (board (cadr ref-board)) ;Guarda o board escolhido
+                           (numero-board (car ref-board)) ;Guarda o nº do board escolhido
+                           (no (list (create-no (get-board-reverse board) nil))))
+                      (ecase option
+                       (1
+                         (let* ((moves (moves))
+                                (obj (def-objetivo))
+                                (solution (list (time-atual) (bfs 'sucessores no moves obj) (time-atual) numero-board  moves obj 'BFS)))
+                           (stats-write solution)))
+                       (2
+                         (let* ((moves (moves))
+                                (obj (def-objetivo))
+                                (solution (list (time-atual) (dfs 'sucessores no moves obj) (time-atual) numero-board  moves obj 'DFS)))
+                           (stats-write solution)))
+                       (3
+                         (let* ((heuristica (def-heuristica))
+                                (moves (moves))
+                                (obj (def-objetivo))
+                                (solution (list (time-atual) (a* 'sucessores heuristica no obj moves) (time-atual) numero-board  moves obj 'A* heuristica)))
+                           (stats-write solution)))
+)))))	
+)
+
+;Menu dos movimentos maximos
+(defun definir-movimentos()
+  (format t "~% -------------------------------------- ")
+  (format t "~% Jogo do Bispo - Numero max de moves   ")
+  (format t "~%                                       ")
+  (format t "~%             n - Não definir           ")
+  (format t "~%            -1 - Voltar                ")
+  (format t "~%                                       ")
+  (format t "~%             s - Sair                  ")
+  (format t "~% -------------------------------------~%~%> ")
+)
+
+;Função em que o jogador escolhe o numero de movimentos maximos
+(defun moves()
+  (progn
+    (definir-movimentos)
+    (let ((option (read)))
+      (cond
+       ((eq option 'n) 10)
+       ((eq option '-1) (ask-algorithm))
+       ((eq option 's) (format t "Até á próxima!"))
+       ((or (not (numberp option)) (< option -1)) (progn (format t "Insira uma opção válida") (moves)))
+       (t option))))
+)
+
+;Menu de pontos objetivos
+(defun definir-objetivo()
+  (format t "~% -------------------------------------- ")
+  (format t "~%   Jogo do Bispo - Definir objetivo    ")
+  (format t "~%                                       ")
+  (format t "~%             n - Não definir           ")
+  (format t "~%            -1 - Voltar                ")
+  (format t "~%                                       ")
+  (format t "~%             s - Sair                  ")
+  (format t "~% -------------------------------------~%~%> ")
+)
+
+;Função ao qual o jogador defini os pontos objetivos
+(defun def-objetivo()
+  (progn
+    (definir-objetivo)
+    (let ((option (read)))
+      (cond
+       ((eq option 'n) nil)
+       ((eq option '-1) (ask-algorithm))
+       ((eq option 's) (format t "Até á próxima!"))
+       ((or (not (numberp option)) (< option -1)) (progn (format t "Insira uma opção válida") (def-objetivo)))
+       (t option))))
+)
+
+(defun definir-heuristica()
+  (format t "~% -------------------------------------- ")
+  (format t "~%  Jogo do Bispo - Escolher heuristica  ")
+  (format t "~%                                       ")
+  (format t "~%        1 - Heuristica Enuncia         ")
+  (format t "~%        2 - Heuristica Criada          ")
+  (format t "~%            0 - Voltar                 ")
+  (format t "~%                                       ")
+  (format t "~%             s - Sair                  ")
+  (format t "~% -------------------------------------~%~%> ")
+)
+
+(defun def-heuristica()
+  (progn
+    (definir-heuristica)
+    (let ((option (read)))
+      (cond
+       ((eq option '0) (ask-algorithm))
+       ((eq option 's) (format t "Até á próxima!"))
+       ((eq option '1) 'heuristica)
+       ((eq option '2) 'heuristica-criada)
+       ((or (not (numberp option)) (< option 0) (> option 2)) (progn (format t "Insira uma opção válida") (def-heuristica)))
+       (t 'heuristica))))
+)
+
+;******** STATS ********
+
+;Função que retorna o tempo atual
+(defun time-atual()
+  (multiple-value-bind (s m h) (get-decoded-time)
+    (list h m s))
+)
+
+;Função que devolve o caminho para o ficheiro
+(defun stats-file()
+  (make-pathname :host "c" :directory '(:absolute "lisp") :name "stats" :type "dat")
+)
+
+;Função que escreve os stats para o ficheiro
+(defun stats-write(solution)
+  (let* ((tempo-i (first solution)) ;Tempo inicial
+         (path (second solution)) ;Caminho solução
+         (tempo-f (third solution)) ;Tempo final
+         (numero-board (fourth solution)) ;Numero do board escolhido
+         (moves (fifth solution)) ;Movimentos realizados
+         (obj (sixth solution)) ;Pontos objetivo
+         (algoritmo (seventh solution)) ;Algoritmo selecionado
+         (heuristica (eighth solution))) ;Heuristica selecionada
+    (with-open-file (f (stats-file) :direction :output :if-exists :rename-and-delete :if-does-not-exist :create)
+      (progn
+        (format f"~%** Board - Stats ~a **" numero-board)
+        (format f"~%~t> Algoritmo: ~a" algoritmo)
+        (format f"~%~t> Inicio: ~a:~a:~a" (car tempo-i) (cadr tempo-i) (caddr tempo-i))
+        (format f"~%~t> Fim: ~a:~a:~a" (car tempo-f) (cadr tempo-f) (caddr tempo-f))
+        (format f"~%~t> Nos gerados: ~a" (+ (cadr path) (caddr path))) ;Total de nos gerados (abertos + fechados)
+        (format f"~%~t> Nos expandidos: ~a" (caddr path))
+        (format f"~%~t> Profundidade max: ~a" moves)
+        (format f"~%~t> Objetivo: ~a" obj)
+        (format f"~%~t> Penetrância: ~a" (penetrancia path))
+        (format f"~%~t> Comprimento: ~a" (profun-no (car path)))
+        (format f"~%~t> Pontos totais: ~a" (g-no (car path)))
+        (if (eq algoritmo 'A*)
+            (format f"~%~t> Heuristica: ~a" heuristica))
+        (escreve-path (car path) (+ (cadr path) (caddr path)) (caddr path))))) ;Imprime para o ecrã os stats
+)
+
+;Mostra o caminho até a um no
+(defun escreve-path(no &optional abertos fechados (stream t))
+  (cond
+   ((null no) nil)
+   ((null (pai-no no)) (print-board (estado-no no)))
+   (t (progn
+        (escreve-path (pai-no no))
+        (format stream "~%-------------------")
+        (print-board (estado-no no))
+        (cond
+         ((and (not (null abertos)) (not (null fechados)))
+          (progn
+            (format stream "~%~t~t Nos abertos: ~a" abertos)
+            (format stream "~%~t~t Nos fechados: ~a" fechados)
+            (format stream "~%~t~t Movimentos feitos: ~a" (profun-no no))
+            (format stream "~%~t~t Pontos: ~a" (g-no no))))))))
+)
+        
+;******* TESTES ******
+
+(defun bfs-teste-a()
+  (bfs 'sucessores (list (create-no (get-board-reverse (board-a)) nil)) nil 100)
+)
+
+(defun bfs-teste-b()
+  (bfs 'sucessores (list (create-no (get-board-reverse (board-b)) nil)) nil 150)
+)
+
+(defun bfs-teste-c()
+  (bfs 'sucessores (list (create-no (get-board-reverse (board-c)) nil)) nil 300)
+)
+
+(defun bfs-teste-d()
+  (bfs 'sucessores (list (create-no (get-board-reverse (board-d)) nil)) nil 400)
+)
+
+(defun bfs-teste-e()
+  (bfs 'sucessores (list (create-no (get-board-reverse (board-e)) nil)) nil 700)
+)
+
+(defun bfs-teste-f()
+  (bfs 'sucessores (list (create-no (get-board-reverse (board-f)) nil)) 5 1500)
+)
+
+
+
+(defun dfs-teste-a()
+  (dfs 'sucessores (list (create-no (get-board-reverse (board-a)) nil)) 5)
+)
+
+(defun dfs-teste-b()
+  (dfs 'sucessores (list (create-no (get-board-reverse (board-b)) nil)) 10)
+)
+
+(defun dfs-teste-f()
+  (dfs 'sucessores (list (create-no (get-board-reverse (board-f)) nil)) 5 1500)
+)
+
+
+
+
+(defun a*-teste-a()
+  (a* 'sucessores 'heuristica (list (create-no (get-board-reverse (board-a)) nil)) 100)
+)
+
+(defun a*-teste-b()
+  (a* 'sucessores 'heuristica (list (create-no (get-board-reverse (board-b)) nil)) 150)
+)
+
+(defun a*-teste-f()
+  (a* 'sucessores 'heuristica (list (create-no (get-board-reverse (board-f)) nil)) 1500)
+)
+
+(defun a*-teste-f-heuristica()
+  (a* 'sucessores 'heuristica-criada (list (create-no (get-board-reverse (board-f)) nil)) 1500)
+)
